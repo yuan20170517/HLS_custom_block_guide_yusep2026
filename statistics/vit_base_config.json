@@ -1,0 +1,19 @@
+{
+  "model_name": "Vision_Transformer_Base_16",
+  "patch_size": 16,
+  "image_resolution": 224,
+  "sequence_length": 197,
+  "embed_dim": 768,
+  "num_heads": 12,
+  "head_dim": 64,
+  "mlp_ratio": 4,
+  "mlp_dim": 3072,
+  "num_layers": 12,
+  "target_device": "xc2ve3858-ssva2112-2MP-e-S",
+  "target_clock_period_ns": 3.33,
+  "quantization": {
+    "weight_precision": "ap_fixed<16,6>",
+    "activation_precision": "ap_fixed<16,6>",
+    "accumulator_precision": "float"
+  }
+}

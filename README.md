@@ -1,16 +1,15 @@
 # 🚀 AMD Vitis HLS Custom Block Guide & Accelerator Flow (2026)
 
 [![AMD Vitis](https://img.shields.io/badge/AMD%20Vitis%20HLS-2026.1+-blue.svg?logo=xilinx)](https://www.xilinx.com/products/design-tools/vitis/vitis-hls.html)
-[![Target Silicon](https://img.shields.io/badge/Target-AMD%20Versal%20AI%20Edge%20Gen%202-orange.svg)](https://www.xilinx.com/products/silicon-devices/acap/versal-ai-edge.html)
+[![Target Silicon](https://img.shields.io/badge/Target-AMD%20Versal%20AI%20Edge%20Gen%202%20VEK385-orange.svg)](https://www.xilinx.com/products/silicon-devices/acap/versal-ai-edge.html)
 [![Co-Simulation Status](https://img.shields.io/badge/C%2FRTL%20Co--Sim-PASS-brightgreen.svg)]()
-[![Timing Slack](https://img.shields.io/badge/Timing%20Slack-%2B5.085ns%20(Closed)-success.svg)]()
-[![Throughput](https://img.shields.io/badge/Initiation%20Interval-II%20%3D%201-blueviolet.svg)]()
+[![Initiation Interval](https://img.shields.io/badge/Initiation%20Interval-II%20%3D%201-blueviolet.svg)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python Tests](https://img.shields.io/badge/Tests-10%20Passing-success.svg)]()
 
 > **Project Authority:** CTSIRI AI-on-FPGA Engineering Lab & 6G AI-RAN Acceleration Group  
 > **Repository:** [`yuan20170517/HLS_custom_block_guide_yusep2026`](https://github.com/yuan20170517/HLS_custom_block_guide_yusep2026)  
-> **Target Silicon:** AMD Versal AI Edge Gen 2 (`xc2ve3858-ssva2112-2MP-e-S`), UltraScale+ (`xck26` / `xcvu9p`)  
+> **Target Silicon:** AMD Versal AI Edge Gen 2 VEK385 (`xc2ve3858-ssva2112-2MP-e-S`)  
 > **Master SOP Guide:** [`docs/hls_tutorial/HLS_Step_by_Step_Tutorial_and_Flowchart.md`](docs/hls_tutorial/HLS_Step_by_Step_Tutorial_and_Flowchart.md)
 
 ---
@@ -20,22 +19,20 @@
 - [2. End-to-End Vitis HLS Design Flowchart](#-2-end-to-end-vitis-hls-design-flowchart)
 - [3. Custom Hardware Operator Catalogue](#-3-custom-hardware-operator-catalogue)
 - [4. Repository Directory Structure](#-4-repository-directory-structure)
-- [5. The 4-Step Automated Toolflow](#-5-the-4-step-automated-toolflow)
-- [6. Post-Implementation Performance & Synthesis Metrics](#-6-post-implementation-performance--synthesis-metrics)
-- [7. Real-World Engineering Debugging Playbook](#-7-real-world-engineering-debugging-playbook)
-- [8. Documentation, Test Suite & Citation](#-8-documentation-test-suite--citation)
+- [5. Step-by-Step Implementation & Toolflow Guide (Steps 0 – 4)](#-5-step-by-step-implementation--toolflow-guide-steps-0--4)
+- [6. Real-World Engineering Debugging Playbook](#-6-real-world-engineering-debugging-playbook)
+- [7. Documentation, Test Suite & Citation](#-7-documentation-test-suite--citation)
 
 ---
 
 ## 🎯 1. Engineering Rationale & Strategic Objective
 
-Standard deep learning compilers and NPU systolic arrays (e.g. AMD Vitis AI / DPU) excel at dense GEMM matrix multiplications and 2D convolutions, but **lack native silicon support for critical Transformer non-linearities and emerging Physical AI operators**:
+Standard deep learning co-processors (e.g. AMD Vitis AI / DPU) are heavily optimised for dense GEMM matrix multiplications and 2D convolutions, but **lack native silicon support for critical Transformer non-linearities and emerging Physical AI operators**:
 * **LayerNorm / RMSNorm:** Requiring multi-stage statistical reduction and normalisation.
 * **Causal & Row-wise Softmax:** Involving online exponential accumulation and dynamic scaling.
 * **Non-linear Activations (GELU, SwiGLU):** Requiring piecewise polynomial or hyperbolic tangent approximation.
-* **2D DCT & Channel Estimation:** Requiring separable matrix transposition and multi-channel FFT pipelining for 6G AI-RAN.
 
-Falling back to a host CPU over PCIe/AXI introduces unacceptable latency ($>50\,\mu\text{s}$), violating hard real-time wireless deadlines. **HLS_custom_block_guide_yusep2026** provides a production-grade blueprint to design, verify, synthesise, and package custom C++ HLS accelerator blocks running directly inside FPGA Programmable Logic (PL) with deterministic **`II = 1`** throughput at $>300\,\text{MHz}$.
+Executing these non-GEMM operators on a host CPU over PCIe/AXI introduces unacceptable latency ($>50\,\mu\text{s}$), violating real-time wireless deadlines in 6G AI-RAN. **HLS_custom_block_guide_yusep2026** provides a production-grade blueprint to design, verify, synthesise, and package custom C++ HLS accelerator blocks running directly inside the Programmable Logic (PL) of the **AMD Versal AI Edge Gen 2 VEK385 platform**, achieving deterministic **`II = 1`** throughput at $>300\,\text{MHz}$.
 
 ---
 
@@ -82,14 +79,14 @@ flowchart TD
 
 ## 🧩 3. Custom Hardware Operator Catalogue
 
-| Operator | Kernel Source | Architectural Strategy & Hardware Pragmas | Latency & II |
-| :--- | :--- | :--- | :---: |
-| **LayerNorm** | [`src/hls/layernorm/`](src/hls/layernorm/) | 16-way Round-Robin Partial Accumulators (`NACC=16`) + cyclic BRAM partitioning | **`II = 1`** |
-| **Softmax** | [`src/hls/softmax/`](src/hls/softmax/) | Online numerical max search + streaming exponential accumulation | **`II = 1`** |
-| **GELU** | [`src/hls/gelu/`](src/hls/gelu/) | Hardware polynomial approximation ($0.5x(1 + \tanh(\sqrt{2/\pi}(x + 0.044715x^3)))$) | **`II = 1`** |
-| **2D DCT** | [`docs/hls_tutorial/`](docs/hls_tutorial/) | Cascaded 1D row/column transforms with ping-pong transposition buffers | **1,297 cycles** |
-| **RMSNorm** | [`case/`](case/) | Pipelined DSP58 MACs + reciprocal square-root approximation | **`II = 1`** |
-| **RoPE** | [`docs/hls_tutorial/`](docs/hls_tutorial/) | Dual-channel complex rotators with on-chip phase BRAM LUT | **`II = 1`** |
+| Operator | Kernel Source | Architectural Strategy & Hardware Pragmas | Status & II | Target Silicon |
+| :--- | :--- | :--- | :---: | :---: |
+| **LayerNorm** | [`src/hls/layernorm/`](src/hls/layernorm/) | 16-way Round-Robin Partial Accumulators (`NACC=16`) + cyclic BRAM partitioning | **`II = 1` (Verified)** | AMD Versal AI Edge Gen 2 VEK385 |
+| **Softmax** | [`src/hls/softmax/`](src/hls/softmax/) | Online numerical max search + streaming exponential accumulation | **TBC** | AMD Versal AI Edge Gen 2 VEK385 |
+| **GELU** | [`src/hls/gelu/`](src/hls/gelu/) | Hardware polynomial approximation | **TBC** | AMD Versal AI Edge Gen 2 VEK385 |
+| **RMSNorm** | [`case/`](case/) | Pipelined DSP58 MACs + reciprocal square-root approximation | **TBC** | AMD Versal AI Edge Gen 2 VEK385 |
+| **2D DCT** | [`docs/hls_tutorial/`](docs/hls_tutorial/) | Cascaded 1D row/column transforms with ping-pong transposition buffers | **TBC** | AMD Versal AI Edge Gen 2 VEK385 |
+| **RoPE** | [`docs/hls_tutorial/`](docs/hls_tutorial/) | Dual-channel complex rotators with on-chip phase BRAM LUT | **TBC** | AMD Versal AI Edge Gen 2 VEK385 |
 
 ---
 
@@ -102,8 +99,8 @@ HLS_custom_block_guide_yusep2026/
 │       └── ci.yml               # Automated GitHub Actions CI test suite
 ├── case/                        # Parametric C++ templates for code generation
 │   ├── layernorm.cpp.template   # LayerNorm template (substitutes embed_dim, NACC)
-│   ├── softmax.cpp.template     # Softmax template (substitutes sequence_length)
-│   └── gelu.cpp.template        # GELU polynomial activation template
+│   ├── softmax.cpp.template     # Softmax template (TBC)
+│   └── gelu.cpp.template        # GELU polynomial activation template (TBC)
 ├── statistics/                  # Model shape & quantization statistics profiles
 │   ├── vit_base_config.json     # Standard ViT-B/16 configuration (D=768, N=197)
 │   └── nanogpt_config.json      # Transformer configuration (D=384, N=1024)
@@ -111,8 +108,8 @@ HLS_custom_block_guide_yusep2026/
 │   ├── hls/
 │   │   ├── common/types.h       # Fixed-point definitions (ap_fixed<16,6>) & macros
 │   │   ├── layernorm/           # LayerNorm C++ kernel implementation & header
-│   │   ├── softmax/             # Softmax C++ kernel implementation & header
-│   │   ├── gelu/                # GELU C++ kernel implementation & header
+│   │   ├── softmax/             # Softmax C++ kernel implementation & header (TBC)
+│   │   ├── gelu/                # GELU C++ kernel implementation & header (TBC)
 │   │   └── instances/           # Generated C++ instances ready for synthesis
 │   ├── main.py                  # Environment inspection module
 │   └── time_utils.py            # Utility timestamp helper
@@ -130,7 +127,7 @@ HLS_custom_block_guide_yusep2026/
 │   ├── test_basic.py            # Basic repository environment validation
 │   ├── test_current_time.py     # Timestamp utility validation
 │   ├── test_layernorm.py        # LayerNorm golden comparison (tolerance < 1e-4)
-│   ├── test_softmax.py          # Softmax normalisation & partial accumulator test
+│   ├── test_softmax.py          # Softmax mathematical validation
 │   ├── test_gelu.py             # GELU polynomial boundary & value verification
 │   └── test_step0_codegen.py    # Parametric C++ code-generation validator
 ├── .gitignore                   # Clean exclusions for Vitis/Vivado temporary files
@@ -140,46 +137,79 @@ HLS_custom_block_guide_yusep2026/
 
 ---
 
-## ⚡ 5. The 4-Step Automated Toolflow
+## 🛠️ 5. Step-by-Step Implementation & Toolflow Guide (Steps 0 – 4)
 
-Execute the reproducible hardware generation and verification flow with 4 simple commands:
+This workflow directly mirrors **Section 3 (Step-by-Step Implementation Guide)** of the master SOP:
 
 ```
 [statistics/*.json] + [case/*.template]
                   │
-                  ▼  (python scripts/step0_case_generation.py)
+                  ▼  (Step 0: Parametric Case Generation)
         [src/hls/instances/*.cpp]
                   │
-                  ▼  (python scripts/step1_hls_build.py)
-       [C-Synthesis to Verilog RTL]
+                  ▼  (Step 1: Testbench & C-Simulation)
+        [Functional Algorithmic Verification PASS]
                   │
-                  ▼  (python scripts/step2_cosim_verify.py)
-      [Cycle-Accurate Co-Simulation PASS]
+                  ▼  (Step 2: Vitis HLS C-Synthesis)
+        [Verilog RTL Synthesis & II=1 Closure]
                   │
-                  ▼  (python scripts/step3_export_vivado.py)
-     [Extensible Kernel Object (.xo) + system.cfg]
+                  ▼  (Step 3: Cycle-Accurate Co-Simulation)
+        [Vivado XSIM Cycle-Accurate PASS]
+                  │
+                  ▼  (Step 4: IP Packaging & System Linking)
+        [Extensible Kernel Object (.xo) + system.cfg]
 ```
 
-### Step 0: Parametric Case Generation
-Populate C++ kernel instances based on target model statistics:
+### 🔹 Step 0: Project Setup & Hardware Configuration
+
+Configure hardware device target (`xc2ve3858-ssva2112-2MP-e-S`), baseline clock ($T_{clk}=8.0\,\text{ns}$ / $3.33\,\text{ns}$), and inject tensor dimensions into parametric templates:
 ```bash
-python scripts/step0_case_generation.py --config statistics/vit_base_config.json
-```
+# AMD Vitis HLS Component Configuration (Versal AI Edge Gen 2)
+part=xc2ve3858-ssva2112-2MP-e-S
 
-### Step 1: Automated Vitis HLS Compilation
-Trigger High-Level Synthesis to compile C++ algorithmic logic into Verilog RTL:
+[hls]
+package.output.format=xo
+package.output.syn=false
+syn.top=dct
+syn.file=C:////Vitis_HLS_tutorial/dct.cpp
+tb.file=C:////Vitis_HLS_tutorial/dct_test.cpp
+tb.file=C:///Vitis_HLS_tutorial/in.dat
+tb.file=C:///Vitis_HLS_tutorial/out.golden.dat
+clock=8ns
+clock_uncertainty=12%
+csim.clean=1
+syn.compile.pipeline_loops=5
+cosim.rtl=verilog
+```
+* **Output:** Synthesizable C++ instances generated in `src/hls/instances/` (`layernorm_kernel_gen.cpp`).
+
+### 🔹 Step 1: Testbench Construction & Algorithmic C-Simulation
+*(Aligned with SOP Step 2 & 3: Kernel Architecture & C-Simulation)*  
+Verify functional algorithmic correctness against NumPy/IEEE-754 golden references prior to RTL synthesis:
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+* **Assertion:** Numerical tolerance strictly bounded ($Tolerance < 10^{-4}$).
+
+### 🔹 Step 2: High-Level Synthesis (C-Synthesis) & Performance Audit
+*(Aligned with SOP Step 4: High-Level Synthesis & Latency Audit)*  
+Synthesise C++ algorithmic logic into Verilog RTL targeting the **AMD Versal AI Edge Gen 2 VEK385**:
 ```bash
 python scripts/step1_hls_build.py --kernel layernorm --part xc2ve3858-ssva2112-2MP-e-S
 ```
+* **Optimization Directives:** `#pragma HLS PIPELINE II=1` and 16-way Round-Robin Partial Accumulators (`NACC=16`) to break DSP58 adder feedback loops.
 
-### Step 2: Cycle-Accurate Co-Simulation
-Verify cycle-accurate hardware behaviour against golden test vectors:
+### 🔹 Step 3: Cycle-Accurate C/RTL Co-Simulation
+*(Aligned with SOP Step 5: Cycle-Accurate C/RTL Co-Simulation)*  
+Validate hardware handshake signalling (`ap_start`, `ap_done`, `ap_ready`) in Vivado Simulator (`xsim`):
 ```bash
 python scripts/step2_cosim_verify.py --kernel layernorm
 ```
+* **Result:** Cycle-accurate timing validated with zero deadlocks or protocol violations.
 
-### Step 3: Package & Export for Vivado / Vitis Linker
-Generate `.xo` kernel containers and platform connection topology (`system.cfg`):
+### 🔹 Step 4: Physical Implementation & Vivado Linker Packaging
+*(Aligned with SOP Step 6 & 7: IP Packaging & System Integration)*  
+Package synthesised RTL into an AMD Extensible Object (`.xo`) and generate platform Network-on-Chip (NoC) connectivity (`system.cfg`):
 ```bash
 python scripts/step3_export_vivado.py
 v++ --link --target hw --platform xilinx_vek385_base_202610_1 --config system.cfg *.xo -o vitis_accel.xclbin
@@ -187,57 +217,11 @@ v++ --link --target hw --platform xilinx_vek385_base_202610_1 --config system.cf
 
 ---
 
-## 📊 6. Post-Implementation Performance & Synthesis Metrics
-
-Benchmarked on **AMD Versal AI Edge Gen 2 (`xc2ve3858-ssva2112-2MP-e-S`)**:
-
-```text
-================================================================
-== Post-Implementation Timing & Hardware Resource Summary
-================================================================
-Target Operating Clock : 8.000 ns (125 MHz baseline)
-Achieved Clock Period  : 2.915 ns (~343.05 MHz max frequency)
-Worst Negative Slack   : +5.085 ns (WNS, Passed Timing Closure)
-Total Negative Slack   : 0.000 ns (TNS, Zero Setup Violations)
-Worst Hold Slack (WHS) : +0.024 ns (Zero Hold Violations)
-
---- Physical Resource Utilisation ---
-CLB LUTs               : 370   (0.07% of 501,120)
-CLB Registers (FF)     : 434   (0.04% of 1,002,240)
-DSP Blocks (DSP58)     : 2     (0.09% of 2,160)
-Block RAM (BRAM)       : 0     (0.00% - distributed LUTRAM used)
-UltraRAM (URAM)        : 0     (0.00%)
-================================================================
-```
-
----
-
-## ⚠️ 7. Real-World Engineering Debugging Playbook
-
-*(Derived from CTSIRI AI-on-FPGA laboratory bring-up and custom operator verification)*
-
-1. **Windows Ampersand (`&`) Bug:** Special characters in folder paths (`Vivado&Vitis_Aug2026`) cause `cmd.exe` to split arguments. Resolved by using underscores (`_`) and relative paths in `hls_config.cfg`.
-2. **Missing `syn.top`:** Explicitly declare `syn.top=<function_name>` in `hls_config.cfg` to designate the hardware entry point.
-3. **Co-Sim `SIGSEGV` at `ENTER_WRAPC`:** Testbench memory buffers must match or exceed the pragma depth (`depth=4096`).
-4. **Windows 260-Byte `MAX_PATH` Limit (`[Common 17-680]`):** Map deep workspace paths to virtual drives via `subst X: <dir>` to reduce path lengths from 280+ to ~60 characters.
-5. **Accumulator Pipeline Latency Stalls (`II > 1`):** Use **16-way Round-Robin Partial Accumulators (`NACC = 16`)** with complete unrolling to eliminate floating-point addition loop-carried dependencies and guarantee **`II = 1`**.
-
----
-
-## 📖 8. Documentation, Test Suite & Citation
-
-* 📘 **Master Tutorial & Flowchart:** [`docs/hls_tutorial/HLS_Step_by_Step_Tutorial_and_Flowchart.md`](docs/hls_tutorial/HLS_Step_by_Step_Tutorial_and_Flowchart.md)
-* 🖼️ **Hardware Waveforms & Evidence Assets:** [`docs/hls_tutorial/assets/`](docs/hls_tutorial/assets/)
-* 🧪 **Automated Test Suite:**
-  ```bash
-  python -m unittest discover -s tests -p "test_*.py" -v
-  ```
-
 ### Citation
 ```bibtex
 @misc{ctsiri_hls_custom_block_2026,
   author = {Yuan, Fangxing},
-  title = {AMD Vitis HLS Custom Block Guide & Hardware Acceleration Repository},
+  title = {AMD Vitis HLS Custom Block Guide & Hardware Acceleration Repository (Versal AI Edge VEK385)},
   year = {2026},
   publisher = {GitHub},
   howpublished = {\url{https://github.com/yuan20170517/HLS_custom_block_guide_yusep2026}}

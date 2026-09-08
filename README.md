@@ -33,16 +33,18 @@
 ```text
 HLS_custom_block_guide_yusep2026/
 ├── src/                        # Synthesizable C++ HLS acceleration kernels
-│   ├── common/                 # Shared data types, fixed-point ap_fixed definitions, and macros
-│   │   └── hls_common.hpp
+│   ├── common/                 # Shared data types, fixed-point ap_fixed definitions, and types.h
+│   │   ├── hls_common.hpp
+│   │   └── types.h
+│   ├── dct/                    # 2D 8x8 Discrete Cosine Transform kernel and testbench
 │   ├── GELU/                   # GELU non-linear activation kernel and testbench
-│   ├── softmax/                # Causal & row-wise Softmax kernel (active sprint)
-│   ├── layernorm/              # LayerNorm statistical reduction kernel
-│   ├── main.py                 # Environment status and hardware inspection module
-│   └── time_utils.py           # Example Timestamp and benchmarking utilities
+│   ├── layernorm/              # LayerNorm statistical reduction kernel and testbench
+│   ├── mha_kernel/             # Quantized Multi-Head Attention kernel and testbench
+│   ├── softmax/                # Row-wise Softmax activation kernel and testbench
+│   └── tiled_matmul/           # Output-stationary tiled matrix multiplication kernel and testbench
 ├── tests/                      # Algorithmic golden models and regression testbenches
-│   ├── test_basic.py           # Environment sanity and path validation
-│   ├── test_current_time.py    # Example System clock assertions
+│   ├── test_basic.py           # Module structure and file completeness assertions
+│   └── test_gelu_embed.py      # Algorithmic golden verification for GELU embedding
 ├── xo/                         # Packaged Xilinx Object (.xo) hardware containers for v++
 ├── ip/                         # Generated Vivado IP Catalog blocks for block designs
 ├── rtl/                        # Post-synthesis cycle-accurate Verilog/VHDL RTL

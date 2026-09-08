@@ -1,0 +1,13 @@
+# ==============================================================================
+# AMD Vitis System Linker Configuration Template (v++ --link)
+# Platform: AMD Versal AI Edge Gen 2 VEK385 / VCK190
+# ==============================================================================
+
+[connectivity]
+# Number of kernel instances
+# nk=<kernel_name>:<number_of_instances>:<instance_name>
+nk=dct:1:dct_1
+
+# AXI4-Stream / Memory Mappings
+# stream_connect=<source_kernel_instance>.<port>:<destination_kernel_instance>.<port>
+# sp=<kernel_instance>.<port>:<DDR_or_HBM_bank>

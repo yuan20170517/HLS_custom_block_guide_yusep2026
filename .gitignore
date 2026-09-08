@@ -81,3 +81,5 @@ solution*/.autopilot/
 .DS_Store
 Thumbs.db
 desktop.ini
+.backups/
+

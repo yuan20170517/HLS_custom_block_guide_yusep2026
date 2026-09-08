@@ -1,0 +1,29 @@
+# ==============================================================================
+# AMD Vitis Unified IDE / Vitis HLS Component Configuration Template
+# Target Platform: AMD Versal AI Edge Gen 2 VEK385
+# Device Part: xc2ve3858-ssva2112-2MP-e-S
+# ==============================================================================
+
+part=xc2ve3858-ssva2112-2MP-e-S
+
+[hls]
+# Clock specifications
+clock=8ns
+clock_uncertainty=12%
+
+# Top-level synthesis function (override per kernel)
+syn.top=hls_kernel_top
+
+# Source & Testbench Files (relative paths recommended)
+syn.file=src/GELU/gelu_embed_kernel.cpp
+syn.file=src/common/hls_common.hpp
+tb.file=src/GELU/tb_gelu_embed_kernel.cpp
+
+# Synthesis directives
+syn.compile.pipeline_loops=5
+
+# Verification & Packaging
+csim.clean=1
+cosim.rtl=verilog
+package.output.format=xo
+package.output.syn=false

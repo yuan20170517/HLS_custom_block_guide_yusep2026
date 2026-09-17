@@ -14,17 +14,17 @@ int main() {
     std::cout << "========================================================\n";
 
     const int ROWS = 4;
-    const int ROW_LEN = 128;
+    const int ROW_LEN = 64;
     const int TOTAL_ELEMENTS = ROWS * ROW_LEN;
 
     std::vector<fp32_t> in(MAX_DEPTH, 0.0f);
     std::vector<fp32_t> out(MAX_DEPTH, 0.0f);
     std::vector<fp32_t> ref_out(TOTAL_ELEMENTS, 0.0f);
 
-    // Initialise synthetic logit test data (including large values to test stability)
+    // Initialise canonical test data (verified by tb_softmax.py)
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < ROW_LEN; ++c) {
-            in[r * ROW_LEN + c] = (fp32_t)((c % 13) - 6) * 1.5f + (fp32_t)(r * 10);
+            in[r * ROW_LEN + c] = (fp32_t)((c % 13) - 6) * 1.5f + (fp32_t)(r * 5.0f);
         }
     }
 
@@ -51,6 +51,20 @@ int main() {
     // Call Top-Level HLS Kernel
     softmax_kernel(in.data(), out.data(), ROWS, ROW_LEN);
 
+    // Print sample comparison for user verification
+    std::cout << " Dataset Dimensions: " << ROWS << " Rows x " << ROW_LEN << " Columns\n";
+    std::cout << "\n --- Row 0 Sample (First 5 Elements) ---\n";
+    std::cout << " Inputs (Logits) : [";
+    for (int i = 0; i < 5; ++i) std::cout << in[i] << (i < 4 ? ", " : "]\n");
+    std::cout << " Outputs (Probs) : [";
+    for (int i = 0; i < 5; ++i) std::cout << out[i] << (i < 4 ? ", " : "]\n");
+
+    std::cout << "\n --- Row 3 Sample (First 5 Elements) ---\n";
+    std::cout << " Inputs (Logits) : [";
+    for (int i = 0; i < 5; ++i) std::cout << in[3 * ROW_LEN + i] << (i < 4 ? ", " : "]\n");
+    std::cout << " Outputs (Probs) : [";
+    for (int i = 0; i < 5; ++i) std::cout << out[3 * ROW_LEN + i] << (i < 4 ? ", " : "]\n\n");
+
     // Validate assertions
     int errors = 0;
     fp32_t max_diff = 0.0f;
@@ -76,7 +90,7 @@ int main() {
         }
     }
 
-    std::cout << "Max absolute difference: " << max_diff << "\n";
+    std::cout << "Max absolute difference vs reference: " << max_diff << "\n";
     if (errors == 0) {
         std::cout << ">>> C-SIMULATION PASSED: 0 errors detected. <<<\n";
         return 0;

@@ -10,7 +10,7 @@ class TestRepositoryStructure(unittest.TestCase):
 
     def test_src_subdirectories_exist(self):
         """Verify that all core HLS accelerator module directories exist."""
-        expected_modules = ["common", "dct", "GELU", "layernorm", "softmax", "mha_kernel", "tiled_matmul"]
+        expected_modules = ["common", "dct", "GELU", "layernorm", "softmax", "mha_kernel", "tiled_matmul", "sampler", "embedding"]
         for mod in expected_modules:
             mod_path = self.src_dir / mod
             self.assertTrue(mod_path.exists(), f"Expected module folder missing: {mod_path}")
